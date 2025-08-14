@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歪脖山工具箱</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- 尝试多个bs58库源 -->
+    <!-- 移除有问题的bs58库加载 -->
+    <script>
+        // 备用加载方案
+        if (typeof ethers === 'undefined') {
+            console.log('正在加载备用ethers.js...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js';
+            script.onload = () => console.log('备用ethers.js加载成功');
+            script.onerror = () => {
+                alert('ethers.js库加载失败，请检查网络连接或尝试使用VPN');
+            };
+            document.head.appendChild(script);
+        }
+        
+        // 将Solana Web3.js暴露到全局
+        if (typeof solanaWeb3 !== 'undefined') {
+            window.solanaWeb3 = solanaWeb3;
+            console.log('Solana Web3.js 已加载');
+        } else {
+            console.log('正在加载备用Solana Web3.js...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js';
+            script.onload = () => {
+                window.solanaWeb3 = solanaWeb3;
+                console.log('备用Solana Web3.js加载成功');
+            };
+            script.onerror = () => {
+                console.warn('Solana Web3.js库加载失败，Solana功能可能不可用');
+            };
+            document.head.appendChild(script);
+        }
+        
+        // 移除重复的base58解码函数，使用okx-dex.js中的实现
+    </script>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+    <!-- 配置锯齿按钮 -->
+    <button class="config-toggle" id="configToggle" onclick="toggleConfig()">
+        <span>⚙️</span>
+        <span>配置</span>
+    </button>
+    
+    <!-- 配置面板遮罩 -->
+    <div class="config-overlay" id="configOverlay" onclick="closeConfig()"></div>
+    
+    <!-- 配置面板 -->
+    <div class="config-panel" id="configPanel">
+        <div id="loadingStatus" style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 5px; display: none;">
+            <span id="statusText">📡 正在加载区块链库...</span>
+        </div>
+        
+        <div class="config-section">
+            <h3>📝 基础配置</h3>
+            <div class="form-group">
+                <label for="networkSelect">选择网络:</label>
+                <select id="networkSelect" onchange="switchNetwork()">
+                    <!-- 运行时由 populatePresetNetworks 注入选项 -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="rpc">RPC节点:</label>
+                <div class="form-row">
+                    <input type="text" id="rpc" placeholder="https://mainnet.infura.io/v3/..." style="flex:1;">
+                    <span id="rpcOverrideBadge" class="badge badge-override" style="display:none;">覆盖默认</span>
+                    <button id="rpcResetBtn" class="btn-link" onclick="resetRpcToDefault()" style="display:none;">恢复默认</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="chainId">链ID:</label>
+                <input type="number" id="chainId" placeholder="1" value="1" readonly>
+            </div>
+            <div class="form-group">
+                <label for="gasPrice">Gas价格 (gwei):</label>
+                <input type="number" id="gasPrice" placeholder="留空自动获取" step="0.1">
+                <small style="color: #666; margin-top: 5px; display: block;">💡 留空将自动获取网络推荐的Gas价格</small>
+            </div>
+            <div class="form-group">
+                <h4 style="margin: 20px 0 10px 0; color: #dc3545;">🔐 私钥安全设置</h4>
+                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <p style="margin: 0; font-size: 14px;"><strong>⚠️ 安全提醒：</strong></p>
+                    <p style="margin: 5px 0 0 0; font-size: 13px;">为了您的资产安全，建议设置加密密码来保护私钥存储</p>
+                </div>
+                <label for="encryptionPassword">加密密码 (可选):</label>
+                <input type="password" id="encryptionPassword" placeholder="设置密码来加密保存的私钥">
+                <small style="color: #666; margin-top: 5px; display: block;">💡 设置密码后，私钥将加密存储在本地。留空则不保存私钥</small>
+                <div style="margin-top: 10px;">
+                    <label style="display: flex; align-items: center; font-size: 14px; cursor: pointer;">
+                        <input type="checkbox" id="savePrivateKeys" style="margin-right: 8px;">
+                        保存私钥到本地 (仅在设置密码时加密保存)
+                    </label>
+                </div>
+            </div>
+            <div class="form-group" style="margin-top: 12px;">
+                <h4 style="margin: 10px 0; color: #495057;">⚡ 批量并发度</h4>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                    <label class="form-row">
+                        <span style="min-width: 90px;">查询并发:</span>
+                        <input type="number" id="queryConcurrency" min="1" max="20" value="8" style="width: 80px;">
+                        <span class="hint-icon has-tooltip" data-tooltip="建议 5-10；过高可能触发RPC限流">ⓘ</span>
+                    </label>
+                    <label class="form-row">
+                        <span style="min-width: 90px;">分发并发:</span>
+                        <input type="number" id="distributeConcurrency" min="1" max="20" value="6" style="width: 80px;">
+                        <span class="hint-icon has-tooltip" data-tooltip="建议 5-8；涉及上链写入，过高会增加失败与限流">ⓘ</span>
+                    </label>
+                    <label class="form-row">
+                        <span style="min-width: 90px;">归集并发:</span>
+                        <input type="number" id="collectConcurrency" min="1" max="20" value="6" style="width: 80px;">
+                        <span class="hint-icon has-tooltip" data-tooltip="建议 5-8；涉及上链写入，过高会增加失败与限流">ⓘ</span>
+                    </label>
+                    <label class="form-row">
+                        <span style="min-width: 90px;">InputData并发:</span>
+                        <input type="number" id="inputdataConcurrency" min="1" max="10" value="5" style="width: 80px;">
+                        <span class="hint-icon has-tooltip" data-tooltip="建议 5-10；极速模式发送不等待确认">ⓘ</span>
+                    </label>
+                </div>
+                <small class="hint">建议区间 5-10，过高可能触发RPC限流（InputData 并发上限 10，用于控制极速模式线程）</small>
+            </div>
+            <div class="form-group">
+                <button class="btn btn-primary" onclick="saveConfigAndNotify()" style="width: 100%; margin-top: 10px;">💾 保存配置</button>
+            </div>
+            <div class="form-group">
+                <button class="btn btn-secondary" onclick="showNetworkManager()" style="width: 100%; margin-top: 10px;">
+                    ⚙️ 管理自定义网络
+                </button>
+            </div>
+            <div class="form-group">
+                <button class="btn" onclick="clearAllData()" style="width: 100%; margin-top: 5px; background: #dc3545; color: white;">
+                    🗑️ 清除所有数据
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 主内容区域 -->
+        <div class="main-content">
+            <div class="header">
+                <h2>🎯 选择操作类型</h2>
+
+                <!-- 网络状态显示 -->
+                <div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin: 15px 0; text-align: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #666; font-size: 14px;">
+                            🌐 当前网络: <span id="currentNetworkDisplay" style="color: #667eea; font-weight: bold;">BSC主网 (BNB)</span>
+                        </span>
+                        <span style="color: #666; font-size: 12px;">
+                            📊 区块高度: <span id="blockHeightDisplay" style="color: #28a745; font-weight: bold;">-</span>
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #666; font-size: 12px;">
+                            ⚡ 网络延迟: <span id="networkLatencyDisplay" style="color: #ffc107; font-weight: bold;">-</span>
+                        </span>
+                        <span style="color: #666; font-size: 12px;">
+                            🔄 连接状态: <span id="connectionStatusDisplay" style="color: #17a2b8; font-weight: bold;">检测中...</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 全局监控状态显示 -->
+                <div id="globalMonitorStatus" style="background: #e9ecef; border: 1px solid #dee2e6; border-radius: 8px; padding: 12px; margin: 15px 0; text-align: center; display: none;">
+                    <p style="margin: 0; color: #495057; font-size: 14px;">
+                        🔔 <span id="globalStatusText">价格监控未启动</span>
+                    </p>
+                </div>
+                
+                <!-- 归集监控状态显示 -->
+                <div id="collectMonitorStatus" style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 12px; margin: 15px 0; text-align: center; display: none;">
+                    <p style="margin: 0; color: #856404; font-size: 14px;">
+                        🔍 <span id="collectStatusText">归集监控未启动</span>
+                    </p>
+                </div>
+                
+                <div id="configTip" style="background: #e7f3ff; border: 1px solid #bee5eb; border-radius: 8px; padding: 15px; margin-top: 15px; display: none;">
+                    <p style="color: #0c5460; margin: 0; font-size: 14px;">
+                        💡 <strong>首次使用提示：</strong>点击左上角的 <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 4px;">⚙️ 配置</span> 按钮设置您的钱包和网络配置
+                    </p>
+                </div>
+            </div>
+            
+            <div class="operation-section">
+                <div class="operation-buttons">
+                    <button class="btn btn-primary" onclick="selectOperation('distribute')">
+                        💰 分发代币
+                    </button>
+                    <button class="btn btn-warning" onclick="selectOperation('collect')">
+                        📥 归集代币
+                    </button>
+                    <button class="btn" style="background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); color: white;" onclick="selectOperation('query')">
+                        🔍 查询代币余额
+                    </button>
+                    <button class="btn" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); color: white;" onclick="selectOperation('inputdata')">
+                        📡 发送InputData
+                    </button>
+                    <button class="btn" style="background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%); color: white;" onclick="selectOperation('contract')">
+                        🔧 调用合约
+                    </button>
+                    <button class="btn" style="background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%); color: white;" onclick="selectOperation('evmGenerator')">
+                        🔧 EVM靓号生成器
+                    </button>
+                    <button class="btn" style="background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: white;" onclick="selectOperation('okxDex')">
+                        🔄 OKX DEX 兑换
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 进度显示区域 -->
+            <div class="progress-section" id="progressSection">
+                <div class="progress-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 id="operationTitle">📊 执行进度</h3>
+                    <div>
+                        <button class="btn btn-secondary btn-sm" onclick="hideProgress()">隐藏</button>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                    <div id="progressText">准备中...</div>
+                    <button class="btn btn-warning btn-sm" id="retryFailedBtn" onclick="retryFailed()" style="display: none;">🔄 失败重试</button>
+                </div>
+                <div class="progress-counters">
+                    <span>并发中: <span id="concurrencyLabel" class="count">-</span></span>
+                    <span class="sep">|</span>
+                    <span>已广播: <span id="counterBroadcast" class="count">0</span></span>
+                    <span>已确认: <span id="counterConfirmed" class="count">0</span></span>
+                    <span>失败: <span id="counterFailed" class="count">0</span></span>
+                </div>
+                
+                <!-- 操作结果表格 -->
+                <div class="table-container" style="margin-top: 20px; max-height: 400px; overflow-y: auto;">
+                    <table class="result-table" id="resultTable">
+                        <thead id="tableHeader">
+                            <!-- 表头将根据操作类型动态生成 -->
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- 结果行将动态添加 -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 统计信息 -->
+                <div class="summary-info" id="summaryInfo" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 10px;">
+                        <span>总计: <span id="totalCount">0</span></span>
+                        <span style="color: #28a745;">成功: <span id="successCount">0</span></span>
+                        <span style="color: #dc3545;">失败: <span id="failedCount">0</span></span>
+                    </div>
+                    
+                    <!-- 操作按钮区域 -->
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <!-- 余额筛选 -->
+                        <div id="balanceFilter" style="display: none; align-items: center; gap: 5px;">
+                            <label style="font-size: 12px;">余额筛选:</label>
+                            <select id="filterType" style="padding: 2px 5px; font-size: 12px;">
+                                <option value="gt">大于</option>
+                                <option value="lt">小于</option>
+                                <option value="eq">等于</option>
+                            </select>
+                            <input type="number" id="filterValue" placeholder="数值" style="width: 80px; padding: 2px 5px; font-size: 12px;">
+                            <button onclick="applyBalanceFilter()" class="btn btn-sm btn-info" style="padding: 2px 8px; font-size: 12px;">
+                                🔍 筛选
+                            </button>
+                            <button onclick="clearBalanceFilter()" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 12px;">
+                                清除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="log-section" id="logSection" style="display: none;">
+                <pre id="logContent"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 分发代币弹窗 -->
+    <div id="distributeModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>💰 分发代币</h3>
+                <button class="close" onclick="closeModal('distributeModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="modalDistributePrivateKey">分发私钥:</label>
+                <input type="password" id="modalDistributePrivateKey" placeholder="请输入用于分发的钱包私钥">
+            </div>
+            <div class="form-group">
+                <label for="modalDistributeTokenAddress">代币合约地址 (可选):</label>
+                <input type="text" id="modalDistributeTokenAddress" placeholder="留空分发原生代币，填写地址分发ERC20代币">
+                <small style="color: #666; margin-top: 5px; display: block;">💡 不填写代币地址将分发原生代币 (<span id="distributeNetworkName">BNB</span>)</small>
+            </div>
+            <div class="form-group">
+                <label for="modalDistributeAmount">每个地址分发数量:</label>
+                <input type="text" id="modalDistributeAmount" placeholder="例如: 100 (ERC20) 或 0.01 (原生代币)">
+            </div>
+            <div class="form-group">
+                <label for="modalDistributeAddresses">接收地址列表 (每行一个):</label>
+                <textarea id="modalDistributeAddresses" placeholder="0x123...&#10;0x456...&#10;0x789..." style="min-height: 120px;"></textarea>
+            </div>
+            <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <p><strong>💡 提示:</strong></p>
+                <p>• 不填写代币地址将分发原生代币</p>
+                <p>• 填写代币地址将分发ERC20代币</p>
+                <p>• 分发前请确保钱包有足够的余额</p>
+                <p>• 需要足够的原生代币支付Gas费用</p>
+                <p>• 当前网络: <span id="distributeCurrentNetwork">BSC (BNB)</span></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('distributeModal')">取消</button>
+                <button class="btn btn-primary" onclick="executeDistribute()">💰 开始分发</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 归集代币弹窗 -->
+    <div id="collectModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📥 归集代币</h3>
+                <button class="close" onclick="closeModal('collectModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="modalCollectToAddress">归集地址:</label>
+                <input type="text" id="modalCollectToAddress" placeholder="代币将归集到此地址">
+            </div>
+            <div class="form-group">
+                <label for="modalCollectTokenAddress">代币合约地址 (可选):</label>
+                <input type="text" id="modalCollectTokenAddress" placeholder="留空归集原生代币，填写地址归集ERC20代币">
+                <small style="color: #666; margin-top: 5px; display: block;">💡 不填写代币地址将归集原生代币 (<span id="collectNetworkName">BNB</span>)</small>
+            </div>
+            
+            <!-- 归集数量设置 -->
+            <div class="form-group">
+                <div id="collectAmountInput" class="amount-input">
+                    <label for="modalCollectAmount">归集数量 (可选):</label>
+                    <input type="text" id="modalCollectAmount" placeholder="留空归集全部余额，填写具体数量">
+                    <small style="color: #666; margin-top: 5px; display: block;">💡 留空将归集钱包中的全部余额</small>
+                </div>
+                
+                <!-- 多选框设置 -->
+                <div style="margin-top: 8px; display: flex; gap: 20px; flex-wrap: nowrap;">
+                    <label style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                        <input type="checkbox" id="collectAllTokens" style="margin: 0;" onchange="toggleCollectAmount()">
+                        <span>归集全部代币</span>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                        <input type="checkbox" id="enableMonitorMode" style="margin: 0;" onchange="toggleMonitorMode()">
+                        <span>启用监控模式</span>
+                    </label>
+                </div>
+                
+                <!-- 监控模式配置 -->
+                <div id="monitorModeConfig" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                    <h4 style="margin: 0 0 10px 0; color: #495057;">🔍 监控配置</h4>
+                    <div style="margin-bottom: 10px;">
+                        <label for="monitorCheckInterval">检查间隔 (秒):</label>
+                        <input type="number" id="monitorCheckInterval" value="5" min="1" max="30" style="width: 100px; margin-left: 10px;">
+                        <small style="color: #666; margin-left: 10px;">建议1-30秒</small>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <label for="monitorMinAmount">最小归集数量:</label>
+                        <input type="text" id="monitorMinAmount" placeholder="0.001" style="width: 150px; margin-left: 10px;">
+                        <small style="color: #666; margin-left: 10px;">低于此数量不归集</small>
+                    </div>
+                    <div style="color: #dc3545; font-size: 14px;">
+                        ⚠️ 监控模式将持续运行，请确保网络稳定
+                    </div>
+                    <div style="color: #007bff; font-size: 14px; margin-top: 8px;">
+                        💡 启动监控时将请求浏览器通知权限，以便及时提醒归集结果
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="modalCollectPrivateKeys">归集钱包私钥列表 (每行一个):</label>
+                <textarea id="modalCollectPrivateKeys" placeholder="私钥1&#10;私钥2&#10;私钥3..." style="min-height: 120px;"></textarea>
+            </div>
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <p><strong>⚠️ 注意:</strong></p>
+                <p>• 会将所有钱包的代币归集到指定地址</p>
+                <p>• 会自动扣除Gas费用</p>
+                <p>• 余额不足Gas费的钱包会跳过</p>
+                <p>• 当前网络: <span id="collectCurrentNetwork">BSC (BNB)</span></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('collectModal')">取消</button>
+                <button id="collectStartBtn" class="btn btn-warning" onclick="executeCollectModal()">📥 开始归集</button>
+                <button id="collectStopBtn" class="btn btn-danger" onclick="stopMonitorMode()" style="display: none;">⏹️ 停止监控</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 查询代币余额弹窗 -->
+    <div id="queryModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>🔍 查询代币余额</h3>
+                <button class="close" onclick="closeModal('queryModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="modalQueryTokenAddress">代币合约地址 (可选):</label>
+                <input type="text" id="modalQueryTokenAddress" placeholder="留空查询原生代币，填写地址查询ERC20代币">
+                <small style="color: #666; margin-top: 5px; display: block;">💡 不填写代币地址将查询原生代币 (<span id="queryNetworkName">BNB</span>)</small>
+            </div>
+            <div class="form-group">
+                <label for="modalQueryAddresses">查询地址列表 (每行一个):</label>
+                <textarea id="modalQueryAddresses" placeholder="0x123...&#10;0x456...&#10;0x789..." style="min-height: 120px;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('queryModal')">取消</button>
+                <button class="btn" style="background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); color: white;" onclick="executeQuery()">🔍 开始查询</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 发送InputData弹窗 -->
+    <div id="inputdataModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📡 发送InputData</h3>
+                <button class="close" onclick="closeModal('inputdataModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="modalInputdataTo">接收地址:</label>
+                <input type="text" id="modalInputdataTo" placeholder="0x...">
+            </div>
+            <div class="form-group">
+                <label for="modalInputdataValue">发送数量 (原生代币):</label>
+                <input type="text" id="modalInputdataValue" placeholder="0" value="0">
+            </div>
+            <div class="form-group">
+                <label for="modalInputdataData">InputData (十六进制):</label>
+                <textarea id="modalInputdataData" placeholder="0x..." style="min-height: 100px;"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="modalInputdataPrivateKeys">发送钱包私钥列表 (每行一个):</label>
+                <textarea id="modalInputdataPrivateKeys" placeholder="私钥1&#10;私钥2&#10;私钥3..." style="min-height: 120px;"></textarea>
+            </div>
+            
+            <!-- 线程模式配置 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #495057;">⚡ 性能配置</h4>
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="inputdataThreadMode" style="margin: 0;">
+                        启用线程模式 (推荐10个以上私钥时使用)
+                    </label>
+                </div>
+                <div id="inputdataThreadConfig" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="font-size: 14px;">并发数量:</label>
+                        <input type="number" id="inputdataThreadCount" value="5" min="1" max="10" style="width: 80px; padding: 4px;">
+                        <small style="color: #6c757d;">建议1-10，避免RPC限制</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background: #d1ecf1; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <p><strong>💡 提示:</strong></p>
+                <p>• 可用于批量调用智能合约</p>
+                <p>• InputData是合约方法的编码数据</p>
+                <p>• 如果不发送原生代币，Value填0</p>
+                <p>• 线程模式适合大批量操作，但需要自定义RPC</p>
+                <p>• 调用合约功能支持60+个区块链网络 (主网+测试网)</p>
+                <p>• 自动加载：适用于已验证的合约，自动获取ABI</p>
+                <p>• 手动输入：适用于未验证合约，需手动提供ABI</p>
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; color: #007bff;"><strong>📋 查看支持的区块链网络 (共60+个)</strong></summary>
+                    <div style="margin-top: 8px; font-size: 11px; color: #666;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 3px;">
+                            <div style="font-weight: bold; color: #28a745; margin-top: 8px;">主网:</div>
+                            <div>• Ethereum Mainnet</div>
+                            <div>• BNB Smart Chain</div>
+                            <div>• Polygon</div>
+                            <div>• Arbitrum One/Nova</div>
+                            <div>• Optimism</div>
+                            <div>• Base</div>
+                            <div>• Avalanche C-Chain</div>
+                            <div>• Fantom Opera</div>
+                            <div>• zkSync</div>
+                            <div>• Linea</div>
+                            <div>• Scroll</div>
+                            <div>• Blast</div>
+                            <div>• opBNB</div>
+                            <div>• Gnosis</div>
+                            <div>• Cronos</div>
+                            <div>• Fraxtal</div>
+                            <div>• HyperEVM</div>
+                            <div>• Mantle</div>
+                            <div>• Memecore</div>
+                            <div>• Moonbeam/Moonriver</div>
+                            <div>• Katana</div>
+                            <div>• Sei</div>
+                            <div>• Sonic</div>
+                            <div>• Sophon</div>
+                            <div>• Swellchain</div>
+                            <div>• Taiko</div>
+                            <div>• Unichain</div>
+                            <div>• WEMIX3.0</div>
+                            <div>• World</div>
+                            <div>• Xai</div>
+                            <div>• XDC</div>
+                            <div>• BitTorrent Chain</div>
+                            <div>• Berachain</div>
+                            <div>• Celo</div>
+                            <div>• Abstract</div>
+                            <div>• ApeChain</div>
+                            
+                            <div style="font-weight: bold; color: #ffc107; margin-top: 8px;">测试网:</div>
+                            <div>• Sepolia</div>
+                            <div>• Holesky</div>
+                            <div>• Hoodi</div>
+                            <div>• Arbitrum Sepolia</div>
+                            <div>• Avalanche Fuji</div>
+                            <div>• Base Sepolia</div>
+                            <div>• Linea Sepolia</div>
+                            <div>• Scroll Sepolia</div>
+                            <div>• Blast Sepolia</div>
+                            <div>• BSC Testnet</div>
+                            <div>• Celo Alfajores</div>
+                            <div>• Fraxtal Testnet</div>
+                            <div>• Mantle Sepolia</div>
+                            <div>• Memecore Testnet</div>
+                            <div>• Moonbase Alpha</div>
+                            <div>• Monad Testnet</div>
+                            <div>• OP Sepolia</div>
+                            <div>• Polygon Amoy</div>
+                            <div>• Sei Testnet</div>
+                            <div>• Sonic Blaze</div>
+                            <div>• Sophon Sepolia</div>
+                            <div>• Swellchain Testnet</div>
+                            <div>• Taiko Hekla L2</div>
+                            <div>• Unichain Sepolia</div>
+                            <div>• WEMIX3.0 Testnet</div>
+                            <div>• World Sepolia</div>
+                            <div>• Xai Sepolia</div>
+                            <div>• XDC Apothem</div>
+                            <div>• zkSync Sepolia</div>
+                            <div>• opBNB Testnet</div>
+                            <div>• BitTorrent Testnet</div>
+                            <div>• Berachain Bepolia</div>
+                            <div>• Abstract Sepolia</div>
+                            <div>• ApeChain Curtis</div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('inputdataModal')">取消</button>
+                <button class="btn" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); color: white;" onclick="executeInputdata()">📡 开始发送</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 调用合约弹窗 -->
+    <div id="contractModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow: hidden;">
+            <div class="modal-header">
+                <h3>🔧 调用合约</h3>
+                <button class="close" onclick="closeModal('contractModal')">&times;</button>
+            </div>
+            
+            <!-- 合约配置区域 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">📋 合约配置</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">钱包私钥:</label>
+                        <input type="password" id="contractPrivateKey" placeholder="0x..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small style="color: #6c757d;">拥有合约权限的钱包私钥</small>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">合约地址:</label>
+                        <input type="text" id="contractAddress" placeholder="0x..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small style="color: #6c757d;">支持多链的智能合约地址</small>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; text-align: center;">
+                    <button onclick="loadContractABI()" class="btn btn-info" style="margin-right: 10px;">
+                        🔍 自动加载
+                    </button>
+                    <button onclick="showManualABIInput()" class="btn btn-warning" style="margin-right: 10px;">
+                        📝 手动输入ABI
+                    </button>
+                    <button onclick="clearContractData()" class="btn btn-secondary">
+                        🗑️ 清空
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 合约交互区域 -->
+            <div id="contractInteractionArea" style="display: none;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">🔧 合约交互</h4>
+                
+                <!-- 合约信息 -->
+                <div style="background: #e7f3ff; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><strong>合约地址:</strong> <span id="contractAddressDisplay" style="font-family: monospace; font-size: 12px;"></span></span>
+                        <span><strong>钱包地址:</strong> <span id="walletAddressDisplay" style="font-family: monospace; font-size: 12px;"></span></span>
+                    </div>
+                </div>
+                
+                <!-- 方法选择 -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">选择方法:</label>
+                    <select id="contractMethodSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="loadMethodParams()">
+                        <option value="">请选择合约方法...</option>
+                    </select>
+                </div>
+                
+                <!-- 参数输入 -->
+                <div id="methodParamsArea" style="display: none;">
+                    <h5 style="margin: 0 0 10px 0; color: #495057;">📝 方法参数</h5>
+                    <div id="methodParamsContainer">
+                        <!-- 参数输入框将动态生成 -->
+                    </div>
+                </div>
+                
+                <!-- 执行按钮 -->
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="executeContractMethod()" class="btn btn-success" style="margin-right: 10px;">
+                        🚀 执行方法
+                    </button>
+                    <button onclick="estimateGas()" class="btn btn-warning">
+                        ⚡ 估算Gas
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 结果显示 -->
+            <div id="contractResultArea" style="margin-top: 20px; display: none;">
+                <h5 style="margin: 0 0 10px 0; color: #495057;">📊 执行结果</h5>
+                <div id="contractResult" style="background: #f8f9fa; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
+                    <!-- 结果将在这里显示 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EVM地址生成器弹窗 -->
+    <div id="evmGeneratorModal" class="modal">
+        <div class="modal-content" style="max-width: 1000px; max-height: 90vh; overflow: hidden;">
+            <div class="modal-header">
+                <h3>🔧 EVM靓号生成器 (CPU多线程)</h3>
+                <button class="close" onclick="closeModal('evmGeneratorModal')">&times;</button>
+            </div>
+            
+            <!-- 生成配置区域 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">⚙️ 生成配置</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">开头匹配 (可选):</label>
+                        <input type="text" id="evmStartPattern" placeholder="例如: 888" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small style="color: #6c757d;">地址开头要包含的字符 (不含0x)</small>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">结尾匹配 (可选):</label>
+                        <input type="text" id="evmEndPattern" placeholder="例如: 666" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small style="color: #6c757d;">地址结尾要包含的字符</small>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">目标数量:</label>
+                        <input type="number" id="evmTargetCount" value="50" min="1" max="1000" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <small style="color: #6c757d;">要生成的靓号地址数量</small>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">计算模式:</label>
+                        <div style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px; background: #f8f9fa; color: #495057; font-weight: 500;">
+                            🖥️ CPU多线程
+                        </div>
+                        <small style="color: #6c757d;">使用CPU多线程并行生成</small>
+                    </div>
+                </div>
+                
+                <!-- CPU配置 -->
+                <div id="cpuConfig" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                    <h5 style="margin: 0 0 10px 0; color: #495057;">🔧 CPU配置</h5>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <label style="display: flex; align-items: center; gap: 5px;">
+                            线程数量:
+                            <button onclick="changeThreadCount(-1)" class="btn btn-sm btn-secondary">-</button>
+                            <span id="threadCountDisplay" style="min-width: 40px; text-align: center; font-weight: 600;">8</span>
+                            <button onclick="changeThreadCount(1)" class="btn btn-sm btn-secondary">+</button>
+                        </label>
+                        <small style="color: #6c757d;">建议设置为CPU核心数的1-2倍</small>
+                    </div>
+                </div>
+                
+                <!-- 操作按钮 -->
+                <div style="margin-top: 15px; text-align: center;">
+                    <button id="startGenerateBtn" onclick="startEvmGeneration()" class="btn btn-success" style="margin-right: 10px;">
+                        🚀 开始生成
+                    </button>
+                    <button id="stopGenerateBtn" onclick="stopEvmGeneration()" class="btn btn-danger" style="display: none; margin-right: 10px;">
+                        ⏹️ 停止生成
+                    </button>
+                    <button id="downloadResultsBtn" onclick="downloadEvmResults()" class="btn btn-info" style="display: none;">
+                        📥 下载结果
+                    </button>
+                </div>
+            </div>
+
+            <!-- 生成进度和结果 -->
+            <div style="max-height: 400px; overflow-y: auto;">
+                <!-- 进度显示 -->
+                <div id="evmProgress" style="background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h5 style="margin: 0; color: #495057;">📊 生成进度</h5>
+                        <div style="font-size: 0.9rem; color: #6c757d;">
+                            <span id="evmElapsedTime">00:00</span> | 
+                            <span id="evmGenerationSpeed">0</span> 次/秒
+                        </div>
+                    </div>
+                    <div style="background: #fff; border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 10px;">
+                        <div id="evmProgressBar" style="height: 100%; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                        <span>已找到: <strong id="evmFoundCount">0</strong></span>
+                        <span>已扫描: <strong id="evmScannedCount">0</strong></span>
+                        <span>目标: <strong id="evmTargetDisplay">0</strong></span>
+                    </div>
+                </div>
+
+                <!-- 结果表格 -->
+                <div class="table-container" style="border: 1px solid #e9ecef; border-radius: 8px;">
+                    <table class="result-table" id="evmResultTable" style="margin: 0;">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px; text-align: center;">#</th>
+                                <th style="min-width: 300px;">📍 EVM地址 <small style="color: #6c757d;">(可复制)</small></th>
+                                <th style="min-width: 250px;">🔑 私钥 <small style="color: #6c757d;">(可复制)</small></th>
+                                <th style="min-width: 280px;">🎯 助记词 <small style="color: #6c757d;">(可复制)</small></th>
+                                <th style="width: 120px; text-align: center;">📋 操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="evmResultBody">
+                            <tr><td colspan="5" style="text-align: center; padding: 40px; color: #6c757d;">
+                                <div style="font-size: 16px; margin-bottom: 10px;">⏳ 配置参数后点击"开始生成"</div>
+                                <small style="color: #8e9295;">生成后可点击 📋🔑🎯📄 按钮复制对应信息</small>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OKX DEX 兑换弹窗 -->
+    <div id="okxDexModal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow: hidden;">
+            <div class="modal-header">
+                <h3>🔄 OKX DEX 兑换</h3>
+                <button class="close" onclick="closeModal('okxDexModal')">&times;</button>
+            </div>
+            
+            <!-- 网络选择区域 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">🌐 网络选择</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center;">
+                    <select id="okxDexNetwork" onchange="updateOkxDexTokens()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="bsc">BSC (BNB)</option>
+                        <option value="ethereum">Ethereum (ETH)</option>
+                        <option value="solana">Solana (SOL)</option>
+                    </select>
+                    <span id="okxDexNetworkInfo" style="color: #6c757d; font-size: 14px;">当前网络: BSC</span>
+                </div>
+                <div id="solanaNotice" style="margin-top: 10px; padding: 10px; background: #e7f3ff; border-radius: 6px; display: none;">
+                    <p style="margin: 0; color: #0c5460; font-size: 13px;">
+                        💡 Solana网络支持USDT、USDC、SOL代币兑换，无需授权操作
+                    </p>
+
+
+                </div>
+            </div>
+            
+            <!-- 兑换配置区域 -->
+            <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">💱 兑换配置</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">支付代币:</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select id="okxDexFromToken" onchange="updateOkxDexTokenInputs()" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="USDT">USDT</option>
+                                <option value="USDC">USDC</option>
+                                <option value="WETH">WETH</option>
+                                <option value="WBNB">WBNB</option>
+                                <option value="SOL">SOL</option>
+                                <option value="custom">自定义地址</option>
+                            </select>
+                        </div>
+                        <input type="text" id="okxDexFromTokenAddress" placeholder="输入代币合约地址" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px; display: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">接收代币:</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select id="okxDexToToken" onchange="updateOkxDexTokenInputs()" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="USDC">USDC</option>
+                                <option value="USDT">USDT</option>
+                                <option value="WETH">WETH</option>
+                                <option value="WBNB">WBNB</option>
+                                <option value="SOL">SOL</option>
+                                <option value="custom">自定义地址</option>
+                            </select>
+                        </div>
+                        <input type="text" id="okxDexToTokenAddress" placeholder="输入代币合约地址" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px; display: none;">
+                    </div>
+                    <div>
+                        <label style="display: flex; align-items: center; margin-bottom: 5px; font-weight: 500;">
+                            <input type="checkbox" id="okxDexAllTokens" onchange="toggleOkxDexAmountInput()" style="margin-right: 8px;">
+                            <span>兑换所有代币</span>
+                        </label>
+                        <input type="text" id="okxDexAmount" placeholder="0.1" oninput="autoGetOkxDexQuote()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">滑点设置 (%):</label>
+                        <input type="number" id="okxDexSlippage" value="0.5" min="0.1" max="10" step="0.1" onchange="updateOkxDexQuote()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 钱包配置区域 -->
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">🔐 钱包配置</h4>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">钱包私钥列表 (每行一个):</label>
+                        <textarea id="okxDexPrivateKeys" placeholder="私钥1&#10;私钥2&#10;私钥3..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 100px; font-family: monospace;"></textarea>
+                        <small style="color: #6c757d;">支持批量执行，每行输入一个私钥</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- API配置编辑区域 -->
+            <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 10px 0; color: #495057;">🔑 API 配置信息
+                    <button class="btn-link" onclick="window.open('https://web3.okx.com/zh-hans/build/dev-portal','_blank','noopener')" title="前往OKX Web3开发者中心申请API">申请API →</button>
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-family: monospace; font-size: 12px;">
+                    <div>
+                        <strong>API Key:</strong> 
+                        <input type="text" id="okxDexApiKey" value="" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; margin-top: 2px;">
+                    </div>
+                    <div>
+                        <strong>Secret Key:</strong> 
+                        <input type="password" id="okxDexSecretKey" value="" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; margin-top: 2px;">
+                    </div>
+                    <div>
+                        <strong>Project ID:</strong> 
+                        <input type="text" id="okxDexProjectId" value="" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; margin-top: 2px;">
+                    </div>
+                    <div>
+                        <strong>Passphrase:</strong> 
+                        <input type="password" id="okxDexPassphrase" value="" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; margin-top: 2px;">
+                    </div>
+                </div>
+                <div style="margin-top: 10px; text-align: center;">
+                    <button onclick="saveOkxDexApiConfig()" class="btn btn-primary btn-sm">💾 保存API配置</button>
+                    <button onclick="resetOkxDexApiConfig()" class="btn btn-secondary btn-sm" style="margin-left: 10px;">🔄 重置为默认</button>
+                </div>
+            </div>
+            
+            <!-- 余额检查提示 -->
+            <div id="okxDexBalanceCheck" style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 20px; display: none;">
+                <p style="margin: 0; color: #856404; font-size: 14px;">
+                    💡 系统将自动检查余额，余额不足的钱包将被跳过
+                </p>
+            </div>
+            
+            <!-- 报价显示区域 -->
+            <div id="okxDexQuoteInfo" style="background: #d1ecf1; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none;">
+                <h4 style="margin: 0 0 10px 0; color: #0c5460;">📊 兑换报价</h4>
+                <div id="okxDexQuoteDetails" style="font-size: 14px;">
+                    <!-- 报价信息将在这里显示 -->
+                </div>
+            </div>
+            
+            <!-- 操作按钮区域 -->
+            <div style="text-align: center; margin-bottom: 20px;">
+                <button id="okxDexQuoteBtn" onclick="getOkxDexQuote()" class="btn btn-primary" style="margin-right: 10px;">
+                    💰 获取报价
+                </button>
+                <button id="okxDexSwapBtn" onclick="executeOkxDexBatchSwap()" class="btn btn-success">
+                    🔄 批量执行兑换
+                </button>
+            </div>
+            
+            <!-- 交易状态显示 -->
+            <div id="okxDexStatus" style="margin-top: 15px; padding: 10px; background: #e9ecef; border-radius: 5px; text-align: center; color: #6c757d; display: none;">
+                准备就绪
+            </div>
+        </div>
+    </div>
+
+    <!-- Alpha价格稳定通知弹窗 -->
+    <div id="priceMonitorModal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow: hidden;">
+            <div class="modal-header">
+                <h3>🔔 Alpha价格稳定通知</h3>
+                <button class="close" onclick="closeModal('priceMonitorModal')">&times;</button>
+            </div>
+            
+            <!-- 通知设置区域 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 15px 0; color: #495057;">🔧 通知设置</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="enableNotifications" style="margin-right: 8px;">
+                        <span>📧 启用浏览器通知</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="enableSounds" style="margin-right: 8px;">
+                        <span>🔊 启用音效提醒</span>
+                    </label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span>⏰ 检查间隔:</span>
+                        <button onclick="changeInterval(-10)" class="btn btn-sm btn-secondary">-</button>
+                        <span id="intervalDisplay" style="min-width: 60px; text-align: center; font-weight: 600;">30秒</span>
+                        <button onclick="changeInterval(10)" class="btn btn-sm btn-secondary">+</button>
+                    </div>
+                    <button id="refreshMonitorBtn" onclick="refreshPriceMonitor()" class="btn btn-success btn-sm">
+                        🔄 刷新数据
+                    </button>
+                </div>
+            </div>
+
+            <!-- 代币监控列表 -->
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="result-table" id="priceMonitorTable" style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">代币</th>
+                            <th style="width: 100px;">当前价格</th>
+                            <th style="width: 80px;">稳定性</th>
+                            <th style="width: 120px;">更新时间</th>
+                            <th style="width: 80px;">价格变化</th>
+                            <th style="width: 60px;">提醒</th>
+                        </tr>
+                    </thead>
+                    <tbody id="priceMonitorBody">
+                        <tr><td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">⏳ 点击刷新数据开始监控...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 状态信息 -->
+            <div id="monitorStatus" style="margin-top: 15px; padding: 10px; background: #e9ecef; border-radius: 5px; text-align: center; color: #6c757d;">
+                监控未启动
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加自定义网络弹窗 -->
+    <div id="addNetworkModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>➕ 添加自定义网络</h3>
+                <button class="close" onclick="closeModal('addNetworkModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="modalNetworkName">网络名称:</label>
+                <input type="text" id="modalNetworkName" placeholder="例如: 自定义BSC">
+            </div>
+            <div class="form-group">
+                <label for="modalNetworkRpc">RPC节点:</label>
+                <input type="text" id="modalNetworkRpc" placeholder="https://...">
+            </div>
+            <div class="form-group">
+                <label for="modalNetworkChainId">链ID:</label>
+                <input type="number" id="modalNetworkChainId" placeholder="56">
+            </div>
+            <div class="form-group">
+                <label for="modalNetworkCurrency">原生代币符号:</label>
+                <input type="text" id="modalNetworkCurrency" placeholder="BNB">
+            </div>
+            <div style="background: #d1ecf1; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <p><strong>💡 提示:</strong></p>
+                <p>• 请确保RPC节点可用</p>
+                <p>• 链ID必须与网络匹配</p>
+                <p>• 原生代币符号用于显示</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addNetworkModal')">取消</button>
+                <button class="btn btn-primary" onclick="addCustomNetwork()">➕ 添加网络</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 网络管理器弹窗 -->
+    <div id="networkManagerModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>⚙️ 管理自定义网络</h3>
+                <button class="close" onclick="closeModal('networkManagerModal')">&times;</button>
+            </div>
+            <div id="customNetworksList">
+                <!-- 自定义网络列表将在这里显示 -->
+            </div>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: center;">
+                <p><strong>💡 提示:</strong></p>
+                <p>删除自定义网络后无法恢复，请谨慎操作</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="document.getElementById('networkSelect').value='add-network'; switchNetwork(); closeModal('networkManagerModal');">➕ 添加新网络</button>
+                <button class="btn btn-secondary" onclick="closeModal('networkManagerModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 通知弹窗 -->
+    <div id="notificationToast" class="notification-toast">
+        <div class="icon">💰</div>
+        <div class="content">
+            <div class="title">归集成功</div>
+            <div class="message">检测到代币并已成功归集</div>
+        </div>
+        <button class="close" onclick="closeNotification()">&times;</button>
+    </div>
+    
+    <!-- Alpha排行榜Toast -->
+    <div id="alphaToast"></div>
+
+    <!-- 全局悬浮提示层 -->
+    <div id="tooltipLayer" class="tooltip-layer hidden"></div>
+
+    <!-- 引入模块脚本 -->
+    <script src="js/core.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/distribute.js"></script>
+    <script src="js/collect.js"></script>
+    <script src="js/query.js"></script>
+    <script src="js/inputdata.js"></script>
+    <script src="js/contract.js"></script>
+    <script src="js/evm-generator.js"></script>
+    <script src="js/network-monitor.js"></script>
+    <script src="js/okx-dex.js"></script>
+    <script src="js/ui/table.js"></script>
+    <script src="js/ui/modals.js"></script>
+    <script src="js/ui/notifications.js"></script>
+    <script src="js/ui/progress.js"></script>
+    <script src="js/ui/collect-ui.js"></script>
+    <script src="js/ui/distribute-ui.js"></script>
+    <script src="js/ui/query-ui.js"></script>
+    <script src="js/ui/inputdata-ui.js"></script>
+    <script src="js/ui/contract-ui.js"></script>
+    <script src="js/ops/retry.js"></script>
+    <script src="js/integrations/okx-dex-ui.js"></script>
+    <script src="js/main.js"></script>
+    
+    <!-- 调试脚本 - 确保函数正确挂载 -->
+    <script>
+        // 确保selectOperation正确挂载
+        if (typeof window.selectOperation === 'undefined') {
+            console.error('selectOperation未挂载，尝试手动挂载...');
+            if (typeof selectOperation !== 'undefined') {
+                window.selectOperation = selectOperation;
+                console.log('✅ selectOperation手动挂载成功');
+            } else {
+                console.error('❌ selectOperation函数未定义');
+            }
+        } else {
+            console.log('✅ selectOperation已正确挂载');
+        }
+        
+        // 测试弹窗显示
+        window.testModal = function() {
+            console.log('测试弹窗显示...');
+            const modal = document.getElementById('distributeModal');
+            if (modal) {
+                modal.style.display = 'block';
+                console.log('✅ 弹窗显示成功');
+            } else {
+                console.error('❌ 弹窗元素未找到');
+            }
+        };
+        
+        // 移除页面初始化时的 Solana 连接，改为在打开 OKX DEX 时再初始化
+    </script>
+    <script>
+        // 页面就绪后，用SSOT渲染网络下拉
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof window.populatePresetNetworks === 'function') {
+                window.populatePresetNetworks();
+            }
+            if (typeof window.loadFormData === 'function') {
+                window.loadFormData();
+            }
+            // 全局提示层交互
+            const layer = document.getElementById('tooltipLayer');
+            function positionTooltip(target) {
+                const rect = target.getBoundingClientRect();
+                const padding = 8;
+                layer.classList.remove('hidden');
+                // 先设置内容后再测量尺寸
+                const topAbove = rect.top + window.scrollY - layer.offsetHeight - 10;
+                const topBelow = rect.bottom + window.scrollY + 10;
+                let top = topAbove;
+                if (top < window.scrollY) top = topBelow;
+                let left = rect.left + window.scrollX;
+                if (left + layer.offsetWidth > window.scrollX + window.innerWidth - padding) {
+                    left = window.scrollX + window.innerWidth - layer.offsetWidth - padding;
+                }
+                layer.style.top = `${top}px`;
+                layer.style.left = `${left}px`;
+            }
+            function showTooltip(e) {
+                const target = e.target.closest('.has-tooltip');
+                if (!target) return;
+                const text = target.getAttribute('data-tooltip');
+                if (!text) return;
+                layer.textContent = text;
+                positionTooltip(target);
+            }
+            function hideTooltip() { layer.classList.add('hidden'); }
+            document.body.addEventListener('mouseover', (e) => {
+                if (e.target.closest('.has-tooltip')) showTooltip(e);
+            });
+            document.body.addEventListener('mousemove', (e) => {
+                if (!layer.classList.contains('hidden')) {
+                    const target = e.target.closest('.has-tooltip');
+                    if (target) positionTooltip(target);
+                }
+            });
+            document.body.addEventListener('mouseout', (e) => {
+                if (e.target.closest('.has-tooltip')) hideTooltip();
+            });
+        });
+    </script>
+</body>
+</html> 
