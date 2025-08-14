@@ -1,0 +1,465 @@
+/* 表格样式 */
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.result-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.result-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e9ecef;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.result-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.status-success {
+    background: #28a745;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-failed {
+    background: #dc3545;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-processing {
+    background: #ffc107;
+    color: #212529;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.hash-link {
+    color: #007bff;
+    text-decoration: none;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.hash-link:hover {
+    text-decoration: underline;
+}
+
+.address-text {
+    font-family: monospace;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.table-container {
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.btn-sm {
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
+/* 弹窗样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal[style*="display: block"] {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 30px;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #333;
+}
+
+.close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.close:hover,
+.close:focus {
+    color: #667eea;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+/* 通知弹窗样式 */
+.notification-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    z-index: 10000;
+    max-width: 350px;
+    transform: translateX(400px);
+    transition: transform 0.3s ease-in-out;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.notification-toast.show {
+    transform: translateX(0);
+}
+
+.notification-toast .icon {
+    font-size: 20px;
+}
+
+.notification-toast .content {
+    flex: 1;
+}
+
+.notification-toast .title {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.notification-toast .message {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.notification-toast .close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Alpha排行榜的星标样式 */
+.alpha-star {
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: #6c757d;
+    user-select: none;
+    transition: transform 0.15s, color 0.15s;
+}
+
+.alpha-star.fav {
+    color: #ffc107;
+}
+
+.alpha-star.bounce {
+    transform: scale(1.3);
+}
+
+.alpha-logo {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border-radius: 50%;
+}
+
+.alpha-price-up {
+    color: #28a745;
+    font-weight: 500;
+}
+
+.alpha-price-down {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+#alphaToast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 10000;
+}
+
+/* Alpha排行榜区域样式 */
+.alpha-ranking-section {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hidden {
+    display: none;
+}
+
+.amount-input {
+    display: none;
+    margin-top: 15px;
+}
+
+.amount-input.show {
+    display: block;
+}
+
+/* 确保合约模态框可见 */
+#contractModal {
+    z-index: 1001 !important;
+}
+
+#contractModal .modal-content {
+    z-index: 1002 !important;
+}
+
+/* 其他按钮样式 */
+.btn-info {
+    background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+    color: white;
+}
+
+.btn-info:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(23, 162, 184, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
+}
+
+.btn-outline-primary {
+    background: transparent;
+    color: #007bff;
+    border: 1px solid #007bff;
+}
+
+.btn-outline-primary:hover {
+    background: #007bff;
+    color: white;
+}
+
+.btn-outline-warning {
+    background: transparent;
+    color: #ffc107;
+    border: 1px solid #ffc107;
+}
+
+.btn-outline-warning:hover {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-outline-success {
+    background: transparent;
+    color: #28a745;
+    border: 1px solid #28a745;
+}
+
+.btn-outline-success:hover {
+    background: #28a745;
+    color: white;
+}
+
+.btn-outline-info {
+    background: transparent;
+    color: #17a2b8;
+    border: 1px solid #17a2b8;
+}
+
+.btn-outline-info:hover {
+    background: #17a2b8;
+    color: white;
+}
+
+.btn-outline-secondary {
+    background: transparent;
+    color: #6c757d;
+    border: 1px solid #6c757d;
+}
+
+.btn-outline-secondary:hover {
+    background: #6c757d;
+    color: white;
+} 
+
+/* 可排序表格头部样式 */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sortable::after {
+    content: '↕';
+    position: absolute;
+    right: 8px;
+    opacity: 0.5;
+    font-size: 12px;
+}
+
+.sortable.asc::after {
+    content: '↑';
+    opacity: 1;
+}
+
+.sortable.desc::after {
+    content: '↓';
+    opacity: 1;
+} 
+
+/* Utility layout classes */
+.form-row { display: flex; align-items: center; gap: 8px; }
+.form-col { display: flex; flex-direction: column; gap: 6px; }
+.form-grid-1 { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Hints and notes */
+.hint { color: #666; margin-top: 5px; display: block; font-size: 12px; }
+.hint-inline { color: #6c757d; font-size: 12px; margin-left: 6px; }
+.hint-icon { color: #6c757d; cursor: help; font-size: 12px; user-select: none; }
+
+/* Tooltip */
+.has-tooltip { position: relative; }
+.has-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 140%;
+  left: 0;
+  background: rgba(33, 37, 41, 0.95);
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 1000;
+}
+.has-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 130%;
+  left: 8px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(33, 37, 41, 0.95) transparent transparent transparent;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 1000;
+}
+.has-tooltip:hover::after,
+.has-tooltip:hover::before { opacity: 1; transform: translateY(0); }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 12px; line-height: 1; }
+.badge-override { background: #fff3cd; color: #856404; border: 1px solid #ffe8a1; }
+.badge-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.badge-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+/* Link-like button */
+.btn-link { background: transparent; border: none; color: #007bff; cursor: pointer; font-size: 12px; padding: 0 4px; }
+.btn-link:hover { text-decoration: underline; }
+
+/* Progress counters */
+.progress-counters { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; color: #495057; }
+.progress-counters .count { font-weight: 600; }
+.progress-counters .sep { color: #adb5bd; } 
+
+/* Global tooltip layer */
+.tooltip-layer { position: fixed; z-index: 2147483647; background: rgba(33,37,41,0.97); color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 12px; line-height: 1.2; max-width: 60vw; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.tooltip-layer.hidden { display: none; } 
