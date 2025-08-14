@@ -3,11 +3,11 @@
 // OKX DEX API 配置 - 暴露给前台
 // 默认（试用）API配置（用于引导）
 const DEFAULT_OKX_DEX_CONFIG = {
-  apiKey: '5f5799b8-d227-4ae8-98ea-6f3d0933c7e7',
-  secretKey: 'F342316DA7360A846F49C194AAB54DFE',
-  projectId: '23ef930617db1af68869a957d04c47f6',
-  baseUrl: 'www.okx.com',
-  passphrase: '!Qa8562152'
+  apiKey: '',
+  secretKey: '',
+  projectId: '',
+  baseUrl: '',
+  passphrase: ''
 };
 // 合并本地存储覆盖（若用户保存，则以用户为准）
 (function(){
@@ -50,7 +50,7 @@ const NETWORK_CONFIG = {
     'ethereum': { chainId: 1, name: 'Ethereum', symbol: 'ETH' },
     'bsc': { chainId: 56, name: 'BSC', symbol: 'BNB' },
     'solana': { chainId: 501, name: 'Solana', symbol: 'SOL', rpcUrl: 'https://solana-rpc.publicnode.com', rpcUrls: [
-        'https://lb.drpc.org/solana/ArYqq_IQskf6nONKe1Vm049howYGA2YR8Ir6ssvAG40d'  
+        'https://solana-rpc.publicnode.com'  
     ] }
 };
 
